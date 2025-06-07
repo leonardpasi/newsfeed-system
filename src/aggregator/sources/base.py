@@ -1,9 +1,11 @@
 from abc import ABC, abstractmethod
 
+from src.schemas.news_item import NewsItem
+
 
 class BaseSource(ABC):
     @abstractmethod
-    def fetch_articles(self) -> List[NewsItem]:
+    def fetch_articles(self) -> list[NewsItem]:
         pass
 
     @property
