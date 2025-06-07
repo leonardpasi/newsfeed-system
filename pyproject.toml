@@ -1,0 +1,26 @@
+[project]
+name = "nexthink-news-aggregator"
+version = "0.1.0"
+description = "A real-time newsfeed system that aggregates IT-related news from selected public sourcers, filters them for relevance, and provides a simple web dashboard to display the latest updates"
+authors = [
+    {name = "Léonard Pasi"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "requests (>=2.32.3,<3.0.0)",
+    "boto3 (>=1.38.31,<2.0.0)",
+    "openai (>=1.84.0,<2.0.0)",
+    "pydantic (>=2.11.5,<3.0.0)",
+    "python-dotenv (>=1.1.0,<2.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.0"
+ruff = "^0.11.13"
+
