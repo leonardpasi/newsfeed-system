@@ -17,6 +17,7 @@ class NewsItem:
     published_at: datetime = None
 
     # Additional attributes
+    link: Optional[str] = None
     is_synthetic: bool = False  # True for /ingest items, False for RSS/Reddit
     relevance_score: Optional[float] = None
 

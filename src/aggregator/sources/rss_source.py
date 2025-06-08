@@ -130,12 +130,16 @@ class RSSSource(BaseSource):
                 )
                 published_at = datetime.utcnow()
 
+            # Extract link
+            link = self._extract_link(entry)
+
             return NewsItem(
                 id=article_id,
                 source=self.source_name,
                 title=title,
                 body=body,
                 published_at=published_at,
+                link=link,
             )
 
         except Exception as e:
@@ -147,7 +151,7 @@ class RSSSource(BaseSource):
 
         # Try different content fields
         # https://www.rssboard.org/rss-specification#hrelementsOfLtitemgt
-        content_fields = ["content", "description"]
+        content_fields = ["content", "dc_content", "description"]
 
         for field in content_fields:
             content = getattr(entry, field, None)
@@ -175,8 +179,9 @@ class RSSSource(BaseSource):
         if hasattr(entry, "guid") and entry.guid:
             return entry.guid
 
-        if hasattr(entry, "link") and entry.link:
-            return entry.link
+        link = self._extract_link(entry)
+        if link:
+            return link
 
         # Last resort: hash of title + source
         if hasattr(entry, "title") and entry.title:
@@ -184,6 +189,13 @@ class RSSSource(BaseSource):
             return hashlib.md5(content.encode()).hexdigest()
 
         return None
+
+    def _extract_link(self, entry) -> Optional[str]:
+        """Extract link from RSS entry."""
+        if hasattr(entry, "link"):
+            return entry.link
+        else:
+            return None
 
     def _parse_date(self, entry) -> Optional[datetime]:
         """Parse publication date from RSS entry."""
