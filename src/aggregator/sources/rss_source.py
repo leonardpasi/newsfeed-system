@@ -12,7 +12,7 @@ from dateutil import parser as date_parser
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from src.aggregator.sources import BaseSource
+from src.aggregator.sources.base import BaseSource
 from src.schemas.news_item import NewsItem
 
 
@@ -144,26 +144,28 @@ class RSSSource(BaseSource):
 
     def _extract_body(self, entry) -> str:
         """Extract body content from various RSS fields."""
-        # Try different content fields in order of preference
-        content_fields = [
-            "content",  # Atom content
-            "summary",  # RSS description/summary
-            "description",  # RSS description
-        ]
+
+        # Try different content fields
+        # https://www.rssboard.org/rss-specification#hrelementsOfLtitemgt
+        content_fields = ["content", "description"]
 
         for field in content_fields:
             content = getattr(entry, field, None)
+
             if content:
                 # Handle different content structures
-                if isinstance(content, list) and content:
-                    # Atom content is often a list
+                if isinstance(content, list):
                     content = content[0]
 
                 if hasattr(content, "value"):
                     # feedparser content object
-                    return self._clean_html(content.value)
-                elif isinstance(content, str):
-                    return self._clean_html(content)
+                    content = content.value
+
+                if isinstance(content, str):
+                    pass
+                    # content = self._clean_html(content)
+
+                return content
 
         return ""
 
@@ -172,9 +174,6 @@ class RSSSource(BaseSource):
         # Try guid first (most reliable), then link, then title-based hash
         if hasattr(entry, "guid") and entry.guid:
             return entry.guid
-
-        if hasattr(entry, "id") and entry.id:
-            return entry.id
 
         if hasattr(entry, "link") and entry.link:
             return entry.link
