@@ -11,8 +11,8 @@ class StorageManager:
     Acts as a facade over the DynamoDB storage implementation.
     """
 
-    def __init__(self, table_name: str = None):
-        self.storage = DynamoDBStorage(table_name)
+    def __init__(self, table_name: str, region: str):
+        self.storage = DynamoDBStorage(table_name, region)
         self.logger = logging.getLogger(__name__)
 
     def store_news_items(self, news_items: List[NewsItem]) -> bool:

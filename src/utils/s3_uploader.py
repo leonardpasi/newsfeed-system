@@ -12,7 +12,7 @@ class S3WebsiteUploader:
     Handles uploading static website files to S3 and configuring static website hosting.
     """
 
-    def __init__(self, bucket_name: str, region: str = "us-east-1"):
+    def __init__(self, bucket_name: str, region: str):
         self.bucket_name = bucket_name
         self.region = region
         self.logger = logging.getLogger(__name__)

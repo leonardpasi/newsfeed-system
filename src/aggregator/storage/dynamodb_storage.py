@@ -1,5 +1,4 @@
 import logging
-import os
 from datetime import datetime
 from typing import List
 
@@ -19,12 +18,12 @@ class DynamoDBStorage:
     - GSI: published_at-index for time-based queries across all sources
     """
 
-    def __init__(self, table_name: str = None):
-        self.table_name = table_name or os.getenv("DYNAMODB_TABLE_NAME", "news-items")
+    def __init__(self, table_name: str, region: str):
+        self.table_name = table_name
         self.logger = logging.getLogger(__name__)
 
         # Initialize DynamoDB resource
-        self.dynamodb = boto3.resource("dynamodb")
+        self.dynamodb = boto3.resource("dynamodb", region_name=region)
         self.table = self.dynamodb.Table(self.table_name)
 
     def store_news_item(self, news_item: NewsItem) -> bool:

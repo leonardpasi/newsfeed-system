@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from pathlib import Path
 
 import click
@@ -81,6 +82,8 @@ def main(
         )
 
     url = sources_urls_dict[source_name]
+    aws_region = os.getenv("AWS_REGION")
+    dynamo_table_name = os.getenv("DYNAMO_TABLE_NAME")
 
     # Initialize components
     source = RSSSource(url, source_name)
@@ -88,7 +91,7 @@ def main(
     # Setup storage if needed
     storage_manager = None
     if store:
-        storage_manager = StorageManager()
+        storage_manager = StorageManager(dynamo_table_name, aws_region)
         if not storage_manager.setup():
             logger.error("Failed to setup storage")
             return
@@ -133,7 +136,7 @@ def main(
 
                     # Upload to S3 if requested
                     if upload_s3 and json_file_path:
-                        upload_to_s3(json_file_path, s3_bucket)
+                        upload_to_s3(json_file_path, s3_bucket, aws_region)
                 return
 
         # Apply filtering only to new articles
@@ -196,7 +199,7 @@ def main(
 
                 # Upload to S3 if requested
                 if upload_s3 and json_file_path:
-                    upload_to_s3(json_file_path, s3_bucket)
+                    upload_to_s3(json_file_path, s3_bucket, aws_region)
             else:
                 logger.info("No new items added, skipping JSON generation")
 
@@ -255,7 +258,7 @@ def generate_web_interface_json(
         raise
 
 
-def upload_to_s3(json_file_path: str, bucket_name: str):
+def upload_to_s3(json_file_path: str, bucket_name: str, region: str):
     """
     Upload the JSON file to S3 bucket.
 
@@ -269,7 +272,7 @@ def upload_to_s3(json_file_path: str, bucket_name: str):
         from src.utils.s3_uploader import S3WebsiteUploader
 
         # Initialize S3 uploader
-        uploader = S3WebsiteUploader(bucket_name)
+        uploader = S3WebsiteUploader(bucket_name, region)
 
         # Create bucket if it doesn't exist
         if not uploader.create_bucket_if_not_exists():
