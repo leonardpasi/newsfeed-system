@@ -250,7 +250,7 @@ class DynamoDBStorage:
             published_at=datetime.fromisoformat(item["published_at"].rstrip("Z")),
             link=item.get("link"),
             is_synthetic=item.get("is_synthetic", False),
-            relevance_score=item.get("relevance_score"),
+            relevance_score=float(item.get("relevance_score")),
         )
 
     def create_table_if_not_exists(self):
