@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 from pathlib import Path
 
 import click
@@ -63,7 +62,7 @@ def main(
     max_items: int,
     upload_s3: bool,
     s3_bucket: str,
-    dynamodb_table: str
+    dynamodb_table: str,
 ):
     """
     Fetch news from RSS sources and optionally filter and store them.
@@ -97,7 +96,7 @@ def main(
     # Setup storage if needed
     storage_manager = None
     if store:
-        storage_manager = StorageManager(dynamo_table_name, aws_region)
+        storage_manager = StorageManager(dynamodb_table, aws_region)
         if not storage_manager.setup():
             logger.error("Failed to setup storage")
             return
