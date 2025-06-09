@@ -141,6 +141,9 @@ class NewsDataGenerator:
                 limit=200,  # Get more items to allow for filtering
                 min_relevance_score=None,  # We'll filter ourselves
             )
+            self.logger.INFO(
+                f"Retrieved {len(all_items)} items from dynamodb storage for json generation, prior to filtering."
+            )
 
             # Apply additional filtering
             filtered_items = []
