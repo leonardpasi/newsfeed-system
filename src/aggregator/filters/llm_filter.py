@@ -4,6 +4,7 @@ import re
 import sys
 from typing import Optional
 
+from dotenv import load_dotenv
 from openai import OpenAI
 
 from src.schemas.news_item import NewsItem
@@ -18,7 +19,7 @@ class LLMRelevanceFilter:
     def __init__(self, model: str = "gpt-4.1-nano-2025-04-14"):
         self.model = model
         self.logger = logging.getLogger(__name__)
-
+        load_dotenv()
         api_key = os.getenv("OPENAI_API_KEY")
         if api_key is None:
             self.logger.error("OpenAI API key not found.")
