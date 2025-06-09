@@ -323,6 +323,13 @@
         <div class="filters">
             <div class="filter-row">
                 <div class="filter-group">
+                    <label for="sortMode">Sort by:</label>
+                    <select id="sortMode" onchange="filterNews()">
+                        <option value="relevance">Relevance</option>
+                        <option value="recency">Recency</option>
+                    </select>
+                </div>
+                <div class="filter-group">
                     <label for="minScore">Min Relevance:</label>
                     <select id="minScore" onchange="filterNews()">
                         <option value="1">All (1+)</option>
@@ -415,26 +422,29 @@
             const minScore = parseFloat(document.getElementById('minScore').value);
             const sourceFilter = document.getElementById('sourceFilter').value;
             const maxAgeHours = parseInt(document.getElementById('maxAge').value);
+            const sortMode = document.getElementById('sortMode').value;
 
             const now = new Date();
             const maxAgeMs = maxAgeHours * 60 * 60 * 1000;
 
             filteredNews = allNews.filter(item => {
-                // Relevance score filter
                 if (item.relevance_score < minScore) return false;
-
-                // Source filter
                 if (sourceFilter && item.source !== sourceFilter) return false;
-
-                // Age filter
                 const itemAge = now - new Date(item.published_at);
                 if (itemAge > maxAgeMs) return false;
-
                 return true;
             });
 
+            // Sort
+            if (sortMode === 'relevance') {
+                filteredNews.sort((a, b) => b.relevance_score - a.relevance_score);
+            } else {
+                filteredNews.sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
+            }
+
             displayNews();
         }
+
 
         // Display filtered news items
         function displayNews() {
