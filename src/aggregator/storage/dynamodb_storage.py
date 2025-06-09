@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from decimal import Decimal
 from typing import List
 
 import boto3
@@ -49,7 +50,7 @@ class DynamoDBStorage:
                 "published_at": news_item.published_at.isoformat() + "Z",
                 "link": news_item.link,
                 "is_synthetic": news_item.is_synthetic,
-                "relevance_score": news_item.relevance_score,
+                "relevance_score": Decimal(news_item.relevance_score),
                 "created_at": datetime.utcnow().isoformat() + "Z",
             }
 
@@ -110,7 +111,7 @@ class DynamoDBStorage:
                             "published_at": news_item.published_at.isoformat() + "Z",
                             "link": news_item.link,
                             "is_synthetic": news_item.is_synthetic,
-                            "relevance_score": news_item.relevance_score,
+                            "relevance_score": Decimal(news_item.relevance_score),
                             "created_at": datetime.utcnow().isoformat() + "Z",
                         }
 
