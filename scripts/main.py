@@ -47,6 +47,12 @@ logging.basicConfig(
     default="newsfeed-static-web-interface",
     help="S3 bucket name for web interface",
 )
+@click.option(
+    "--dynamodb-table",
+    type=str,
+    default="news-items",
+    help="DynamoDB table name",
+)
 def main(
     source_name: str,
     store: bool,
@@ -57,6 +63,7 @@ def main(
     max_items: int,
     upload_s3: bool,
     s3_bucket: str,
+    dynamodb_table: str
 ):
     """
     Fetch news from RSS sources and optionally filter and store them.
@@ -82,8 +89,7 @@ def main(
         )
 
     url = sources_urls_dict[source_name]
-    aws_region = os.getenv("AWS_REGION")
-    dynamo_table_name = os.getenv("DYNAMO_TABLE_NAME")
+    aws_region = "eu-north-1"
 
     # Initialize components
     source = RSSSource(url, source_name)
