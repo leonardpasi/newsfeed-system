@@ -292,10 +292,9 @@ class DynamoDBStorage:
                                 {"AttributeName": "published_at", "KeyType": "HASH"}
                             ],
                             "Projection": {"ProjectionType": "ALL"},
-                            "BillingMode": "OnDemandThroughput",
                         }
                     ],
-                    BillingMode="OnDemandThroughput",  # Simpler than provisioned capacity
+                    BillingMode="PAY_PER_REQUEST",  # Simpler than provisioned capacity
                 )
 
                 # Wait for table to be created
