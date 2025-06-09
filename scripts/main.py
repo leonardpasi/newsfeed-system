@@ -1,3 +1,4 @@
+import json
 import logging
 from pathlib import Path
 
@@ -7,6 +8,7 @@ import yaml
 from src.aggregator.filters.llm_filter import LLMRelevanceFilter
 from src.aggregator.sources.rss_source import RSSSource
 from src.aggregator.storage.storage_manager import StorageManager
+from src.utils.json_generator import NewsDataGenerator
 
 # Setup logging
 logging.basicConfig(
@@ -25,7 +27,36 @@ logging.basicConfig(
 @click.option(
     "--min-score", type=float, default=3.0, help="Minimum relevance score for filtering"
 )
-def main(source_name: str, store: bool, apply_filter: bool, min_score: float):
+@click.option(
+    "--generate-json", is_flag=True, help="Generate JSON file for web interface"
+)
+@click.option(
+    "--json-output",
+    type=str,
+    default="web-interface/news-data.json",
+    help="Output path for JSON file",
+)
+@click.option(
+    "--max-items", type=int, default=50, help="Maximum items to include in JSON output"
+)
+@click.option("--upload-s3", is_flag=True, help="Upload JSON file to S3 bucket")
+@click.option(
+    "--s3-bucket",
+    type=str,
+    default="newsfeed-static-web-interface",
+    help="S3 bucket name for web interface",
+)
+def main(
+    source_name: str,
+    store: bool,
+    apply_filter: bool,
+    min_score: float,
+    generate_json: bool,
+    json_output: str,
+    max_items: int,
+    upload_s3: bool,
+    s3_bucket: str,
+):
     """
     Fetch news from RSS sources and optionally filter and store them.
 
@@ -33,6 +64,8 @@ def main(source_name: str, store: bool, apply_filter: bool, min_score: float):
         python main.py --src tomshardware
         python main.py --src tomshardware --store
         python main.py --src tomshardware --store --filter --min-score 3.5
+        python main.py --src tomshardware --store --filter --generate-json
+        python main.py --src tomshardware --store --filter --generate-json --upload-s3
     """
     logger = logging.getLogger(__name__)
 
@@ -65,6 +98,9 @@ def main(source_name: str, store: bool, apply_filter: bool, min_score: float):
     if apply_filter:
         relevance_filter = LLMRelevanceFilter()
 
+    # Track if new items were added (for JSON generation decision)
+    new_items_added = False
+
     try:
         # Fetch articles
         logger.info(f"Fetching articles from {source_name}")
@@ -88,6 +124,16 @@ def main(source_name: str, store: bool, apply_filter: bool, min_score: float):
 
             if not new_articles:
                 logger.info("No new articles to process")
+                # Still might want to generate JSON if requested
+                if generate_json:
+                    logger.info("Generating JSON file with existing data...")
+                    json_file_path = generate_web_interface_json(
+                        storage_manager, json_output, max_items, min_score
+                    )
+
+                    # Upload to S3 if requested
+                    if upload_s3 and json_file_path:
+                        upload_to_s3(json_file_path, s3_bucket)
                 return
 
         # Apply filtering only to new articles
@@ -117,6 +163,7 @@ def main(source_name: str, store: bool, apply_filter: bool, min_score: float):
             success = storage_manager.store_news_items(new_articles)
             if success:
                 logger.info(f"Successfully stored {len(new_articles)} new articles")
+                new_items_added = True
             else:
                 logger.error("Failed to store some articles")
 
@@ -139,9 +186,113 @@ def main(source_name: str, store: bool, apply_filter: bool, min_score: float):
         else:
             logger.info("No articles met the criteria")
 
+        # Generate JSON file if requested and new items were added
+        if generate_json and storage_manager:
+            if new_items_added or not Path(json_output).exists():
+                logger.info("Generating JSON file for web interface...")
+                json_file_path = generate_web_interface_json(
+                    storage_manager, json_output, max_items, min_score
+                )
+
+                # Upload to S3 if requested
+                if upload_s3 and json_file_path:
+                    upload_to_s3(json_file_path, s3_bucket)
+            else:
+                logger.info("No new items added, skipping JSON generation")
+
     except Exception as e:
         logger.error(f"Error processing {source_name}: {e}")
         raise
+
+
+def generate_web_interface_json(
+    storage_manager: StorageManager,
+    output_path: str,
+    max_items: int,
+    min_relevance_score: float = 1.0,
+) -> str:
+    """
+    Generate JSON file for the web interface.
+
+    Args:
+        storage_manager: StorageManager instance
+        output_path: Path where to save the JSON file
+        max_items: Maximum number of items to include
+        min_relevance_score: Minimum relevance score to include
+
+    Returns:
+        Path to the generated JSON file
+    """
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Initialize JSON generator
+        json_generator = NewsDataGenerator(storage_manager)
+
+        # Generate the JSON data (no sorting - users control sorting in frontend)
+        json_data = json_generator.generate_web_data(
+            max_items=max_items,
+            min_relevance_score=min_relevance_score,
+            exclude_synthetic=True,
+            sort_items=False,  # Let users sort in the frontend
+        )
+
+        # Ensure output directory exists
+        output_file = Path(output_path)
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+
+        # Write JSON file
+        with open(output_file, "w", encoding="utf-8") as f:
+            json.dump(json_data, f, indent=2, ensure_ascii=False)
+
+        logger.info(
+            f"Generated JSON file: {output_path} ({len(json_data['news'])} items)"
+        )
+        return str(output_file)
+
+    except Exception as e:
+        logger.error(f"Error generating JSON file: {e}")
+        raise
+
+
+def upload_to_s3(json_file_path: str, bucket_name: str):
+    """
+    Upload the JSON file to S3 bucket.
+
+    Args:
+        json_file_path: Path to the JSON file to upload
+        bucket_name: S3 bucket name
+    """
+    logger = logging.getLogger(__name__)
+
+    try:
+        from src.utils.s3_uploader import S3WebsiteUploader
+
+        # Initialize S3 uploader
+        uploader = S3WebsiteUploader(bucket_name)
+
+        # Create bucket if it doesn't exist
+        if not uploader.create_bucket_if_not_exists():
+            logger.error("Failed to create/configure S3 bucket")
+            return
+
+        # Read JSON file and upload
+        with open(json_file_path, encoding="utf-8") as f:
+            json_data = f.read()
+
+        success = uploader.upload_json_data(json_data, "news-data.json")
+
+        if success:
+            website_url = uploader.get_website_url()
+            logger.info("JSON uploaded successfully!")
+            logger.info(f"Website URL: {website_url}")
+        else:
+            logger.error("Failed to upload JSON to S3")
+
+    except ImportError:
+        logger.error("S3 uploader not available. Please ensure boto3 is installed.")
+    except Exception as e:
+        logger.error(f"Error uploading to S3: {e}")
 
 
 if __name__ == "__main__":
