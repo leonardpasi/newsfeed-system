@@ -166,8 +166,7 @@ class RSSSource(BaseSource):
                     content = content.value
 
                 if isinstance(content, str):
-                    pass
-                    # content = self._clean_html(content)
+                    content = self._clean_html(content)
 
                 return content
 
