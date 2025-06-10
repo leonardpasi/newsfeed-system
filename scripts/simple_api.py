@@ -2,7 +2,7 @@
 """
 Simple Flask API server for Mock Newsfeed API endpoints.
 Provides /ingest and /retrieve endpoints for automated testing.
-Uses the same filtering logic as the production system.
+Uses batch-based approach - stores current batch in memory only.
 """
 
 import logging
@@ -18,7 +18,6 @@ from flask_limiter.util import get_remote_address
 sys.path.append(str(Path(__file__).parent))
 
 from src.aggregator.filters.llm_filter import LLMRelevanceFilter
-from src.aggregator.storage.storage_manager import StorageManager
 from src.schemas.news_item import NewsItem
 
 # Setup logging
@@ -38,13 +37,14 @@ limiter = Limiter(
 )
 
 # Configuration
-DYNAMODB_TABLE = "news-items"
-AWS_REGION = "eu-north-1"
 MIN_RELEVANCE_SCORE = 3.0  # Moderately relevant threshold
 
-# Initialize components (same as production)
-storage_manager = StorageManager(DYNAMODB_TABLE, AWS_REGION)
+# Initialize LLM filter (same as production)
 relevance_filter = LLMRelevanceFilter()
+
+# In-memory storage for current batch (no DynamoDB for synthetic items)
+current_batch_raw = []  # Original items from /ingest
+current_batch_filtered = []  # Items that passed filtering
 
 
 @app.route("/api/v1/ingest", methods=["POST"])
@@ -52,8 +52,11 @@ relevance_filter = LLMRelevanceFilter()
 def ingest_events():
     """
     Ingest raw events from automated test harness.
+    Stores current batch in memory only (no DynamoDB).
     Uses the same LLM filtering logic as production.
     """
+    global current_batch_raw, current_batch_filtered
+
     try:
         # Validate request
         if not request.is_json:
@@ -69,10 +72,13 @@ def ingest_events():
         if not data:
             return jsonify({"error": "No events provided"}), 400
 
-        # Validate and process events
-        ingested_count = 0
-        processed_events = []
+        logger.info(f"Processing new batch of {len(data)} events")
 
+        # Reset current batch storage
+        current_batch_raw = []
+        current_batch_filtered = []
+
+        # Validate and process events
         for event_data in data:
             try:
                 # Validate required fields
@@ -101,15 +107,25 @@ def ingest_events():
                     is_synthetic=True,  # Mark as test data
                 )
 
+                # Store in raw batch
+                current_batch_raw.append(news_item)
+
                 # Apply the SAME LLM filtering as production
                 relevance_score = relevance_filter.score_relevance(news_item)
 
                 if relevance_score is not None:
                     news_item.relevance_score = relevance_score
-                    processed_events.append(news_item)
-                    logger.info(
-                        f"Processed event {news_item.id} with score {relevance_score}"
-                    )
+
+                    # Check if it passes the filter threshold
+                    if relevance_score >= MIN_RELEVANCE_SCORE:
+                        current_batch_filtered.append(news_item)
+                        logger.info(
+                            f"Accepted event {news_item.id} with score {relevance_score}"
+                        )
+                    else:
+                        logger.info(
+                            f"Rejected event {news_item.id} with score {relevance_score} (below {MIN_RELEVANCE_SCORE})"
+                        )
                 else:
                     logger.warning(f"Failed to score event: {news_item.id}")
 
@@ -119,20 +135,20 @@ def ingest_events():
                 )
                 continue
 
-        # Store processed events (same storage as production)
-        if processed_events:
-            success = storage_manager.store_news_items(processed_events)
-            if success:
-                ingested_count = len(processed_events)
-                logger.info(f"Successfully stored {ingested_count} synthetic events")
-            else:
-                logger.error("Failed to store some events")
+        # Sort filtered items by importance × recency (deterministic ranking)
+        current_batch_filtered.sort(key=_calculate_importance_score, reverse=True)
+
+        logger.info(
+            f"Batch processed: {len(current_batch_raw)} total, "
+            f"{len(current_batch_filtered)} passed filter"
+        )
 
         # Return acknowledgment (matching assignment contract)
         return jsonify(
             {
                 "message": "Events ingested successfully",
-                "ingested_count": ingested_count,
+                "ingested_count": len(current_batch_raw),
+                "filtered_count": len(current_batch_filtered),
                 "total_events": len(data),
             }
         ), 200
@@ -146,22 +162,14 @@ def ingest_events():
 @limiter.limit("30 per minute")
 def retrieve_filtered_events():
     """
-    Retrieve events that passed the filtering criteria.
+    Retrieve events from current batch that passed the filtering criteria.
     Returns items sorted by relevance × recency as required by assignment.
-    Uses the same storage and ranking logic as production.
+    Only returns items from the most recent /ingest call.
     """
     try:
-        # Get filtered synthetic news items using production logic
-        filtered_items = storage_manager.get_filtered_news_for_api(
-            min_relevance_score=MIN_RELEVANCE_SCORE
-        )
-
-        # Filter to only synthetic items (for testing isolation)
-        synthetic_items = [item for item in filtered_items if item.is_synthetic]
-
-        # Convert to API format (matching assignment contract)
+        # Convert current filtered batch to API format (matching assignment contract)
         api_response = []
-        for item in synthetic_items:
+        for item in current_batch_filtered:
             api_response.append(
                 {
                     "id": item.id,
@@ -172,7 +180,7 @@ def retrieve_filtered_events():
                 }
             )
 
-        logger.info(f"Retrieved {len(api_response)} filtered synthetic events")
+        logger.info(f"Retrieved {len(api_response)} filtered events from current batch")
 
         return jsonify(api_response), 200
 
@@ -188,13 +196,42 @@ def health_check():
         {
             "status": "healthy",
             "timestamp": datetime.utcnow().isoformat() + "Z",
+            "current_batch_size": len(current_batch_raw),
+            "filtered_batch_size": len(current_batch_filtered),
             "endpoints": [
-                "POST /api/v1/ingest - Ingest raw events",
-                "GET /api/v1/retrieve - Retrieve filtered events",
+                "POST /api/v1/ingest - Ingest raw events (replaces current batch)",
+                "GET /api/v1/retrieve - Retrieve filtered events from current batch",
                 "GET /api/v1/health - Health check",
             ],
         }
     ), 200
+
+
+def _calculate_importance_score(item: NewsItem) -> float:
+    """
+    Calculate composite importance score for deterministic ranking.
+    Same logic as production system.
+    """
+    if item.relevance_score is None:
+        return 0.0
+
+    # Recency factor: newer items get higher scores
+    now = datetime.utcnow()
+    age_hours = (now - item.published_at).total_seconds() / 3600
+
+    # Decay function for recency
+    if age_hours < 6:
+        recency_factor = 1.0
+    elif age_hours < 24:
+        recency_factor = 0.8
+    elif age_hours < 72:  # 3 days
+        recency_factor = 0.6
+    elif age_hours < 168:  # 1 week
+        recency_factor = 0.4
+    else:
+        recency_factor = 0.2
+
+    return item.relevance_score * recency_factor
 
 
 @app.errorhandler(429)
@@ -237,14 +274,6 @@ def internal_error_handler(e):
 
 def main():
     """Run the Flask API server."""
-    # Verify storage setup
-    logger.info("Setting up storage...")
-    if not storage_manager.setup():
-        logger.error("Failed to setup storage. Exiting.")
-        sys.exit(1)
-
-    logger.info("✅ Storage setup complete")
-
     # Test LLM filter
     logger.info("Testing LLM filter...")
     test_item = NewsItem(
@@ -264,9 +293,12 @@ def main():
     # Start the server
     logger.info("🚀 Starting Mock Newsfeed API server...")
     logger.info("📍 Endpoints:")
-    logger.info("  POST /api/v1/ingest   - Ingest synthetic events")
-    logger.info("  GET  /api/v1/retrieve - Retrieve filtered events")
+    logger.info(
+        "  POST /api/v1/ingest   - Ingest synthetic events (replaces current batch)"
+    )
+    logger.info("  GET  /api/v1/retrieve - Retrieve filtered events from current batch")
     logger.info("  GET  /api/v1/health   - Health check")
+    logger.info("📝 Note: Synthetic data stored in memory only (not DynamoDB)")
 
     # Run Flask server
     # Use host='0.0.0.0' to accept connections from any IP
