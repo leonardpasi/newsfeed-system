@@ -1,4 +1,5 @@
 {
   tomshardware: "https://www.tomshardware.com/feeds.xml",
-  arstechnica: "https://feeds.arstechnica.com/arstechnica/technology-lab"
+  arstechnica: "https://feeds.arstechnica.com/arstechnica/technology-lab",
+  r-infosecnews: "https://www.reddit.com/r/InfoSecNews/"
 }
