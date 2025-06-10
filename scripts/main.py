@@ -6,6 +6,7 @@ import click
 import yaml
 
 from src.aggregator.filters.llm_filter import LLMRelevanceFilter
+from src.aggregator.sources.reddit_source import RedditSource
 from src.aggregator.sources.rss_source import RSSSource
 from src.aggregator.storage.storage_manager import StorageManager
 from src.utils.json_generator import NewsDataGenerator
@@ -91,7 +92,7 @@ def main(
     aws_region = "eu-north-1"
 
     # Initialize components
-    source = RSSSource(url, source_name)
+    source = create_source(source_name, url)
 
     # Setup storage if needed
     storage_manager = None
@@ -301,6 +302,25 @@ def upload_to_s3(json_file_path: str, bucket_name: str, region: str):
         logger.error("S3 uploader not available. Please ensure boto3 is installed.")
     except Exception as e:
         logger.error(f"Error uploading to S3: {e}")
+
+
+def create_source(source_name: str, url: str):
+    """
+    Create appropriate source based on source name and URL.
+
+    Args:
+        source_name: Source identifier
+        url: Source URL or identifier
+
+    Returns:
+        Source instance (RSSSource or RedditSource)
+    """
+    if source_name.startswith("r-"):
+        # Reddit source
+        return RedditSource(url, source_name)
+    else:
+        # RSS source (default)
+        return RSSSource(url, source_name)
 
 
 if __name__ == "__main__":
