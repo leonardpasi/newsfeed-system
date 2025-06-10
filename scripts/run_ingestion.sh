@@ -33,7 +33,7 @@ run_ingestion() {
         --filter \
         --generate-json \
         --upload-s3 \
-        --max-items 50 \
+        --max-items 80 \
         --min-score 3.0 >> "$log_file" 2>&1; then
 
         log "Successfully completed ingestion for $source" >> "$log_file"
@@ -52,7 +52,7 @@ run_ingestion() {
 # Main execution
 if [ $# -eq 0 ]; then
     echo "Usage: $0 <source_name>"
-    echo "Available sources: tomshardware, arstechnica"
+    echo "Available sources: tomshardware, arstechnica, r-infosecnews"
     exit 1
 fi
 
@@ -60,12 +60,12 @@ SOURCE=$1
 
 # Validate source
 case $SOURCE in
-    tomshardware|arstechnica)
+    tomshardware|arstechnica|r-infosecnews)
         run_ingestion "$SOURCE"
         ;;
     *)
         echo "Invalid source: $SOURCE"
-        echo "Available sources: tomshardware, arstechnica"
+        echo "Available sources: tomshardware, arstechnica, r-infosecnews"
         exit 1
         ;;
 esac

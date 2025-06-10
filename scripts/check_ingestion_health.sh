@@ -58,7 +58,7 @@ check_source() {
 }
 
 # Check each source
-for source in tomshardware arstechnica; do
+for source in tomshardware arstechnica r-infosecnews; do
     check_source "$source"
 done
 
