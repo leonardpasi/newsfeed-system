@@ -27,7 +27,7 @@ run_ingestion() {
     cd "$PROJECT_DIR"
 
     # Run the ingestion with all options using Poetry
-    if poetry run python -m scripts.main \
+    if ~/.local/bin/poetry run python -m scripts.main \
         --src "$source" \
         --store \
         --filter \
