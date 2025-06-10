@@ -16,22 +16,88 @@
   - [Configuring environment variables](#configuring-environment-variables)
   - [Running Scripts](#running-scripts)
   - [Install pre-commit hooks](#install-pre-commit-hooks)
-  - [Setup on EC2 instance](#setup-on-ec2-instance)
+  - [EC2 instance setup](#ec2-instance-setup)
+  - [Cron Job Setup](#cron-job-setup)
+  - [Flask Server setup](#flask-server-setup)
+  - [Tests](#tests)
 
 
 ## Architecture
 
 ### Overview
-### Ingestion
-### Filtering
-### Storage
-### Mock NewsFeed API
-### Bonus question
+```
+┌─────────────┐    ┌──────────────┐    ┌─────────────┐    ┌─────────────┐
+│ RSS Feeds   │───▶│  Ingestion   │───▶│ LLM Filter  │───▶│ DynamoDB    │
+│ Reddit API  │    │  (Python)    │    │ (OpenAI)    │    │ Storage     │
+└─────────────┘    └──────────────┘    └─────────────┘    └─────────────┘
+                                                                    │
+┌─────────────┐    ┌──────────────┐    ┌─────────────┐              │
+│ Static Web  │◀───│ S3 Bucket    │◀───│ JSON Export │◀─────────────┘
+│ Dashboard   │    │ (hosting)    │    │ Generator   │
+└─────────────┘    └──────────────┘    └─────────────┘
 
+┌─────────────┐    ┌──────────────┐    ┌─────────────┐    ┌─────────────┐
+│ Test        │───▶│ Mock API     │───▶│ LLM Filter  │───▶│ In-Memory   │
+│ Harness     │    │ (Flask)      │    │ (OpenAI)    │    │ Storage     │
+└─────────────┘    └──────────────┘    └─────────────┘    └─────────────┘
+```
+- **Core Technologies**: Python, Amazon EC2, DynamoDB, S3, OpenAI API, Flask  
+- **Key Principles**: Modular design, automated operations, monitoring
+- **Web Dashboard**: available **[here](https://newsfeed-static-web-interface.s3.eu-north-1.amazonaws.com/dashboard.html)**
+
+### Ingestion
+
+- **RSS Sources**: Tom's Hardware, Ars Technica using `feedparser` with retry logic
+- **Reddit Source**: r/InfoSecNews via PRAW API with rate limiting
+- **Modular Design**: New sources added via `configs/sources_urls.yaml`
+- **Efficiency**: Filters out existing articles before processing
+- **Automation**: Cron jobs for continuous ingestion every x minutes
+
+### Filtering
+
+- **LLM Scoring**: OpenAI GPT-4.1-nano rates relevance on 1-5 scale for IT managers
+  - **1**: Consumer tech, general business
+  - **3**: Software releases, industry trends  
+  - **5**: Security breaches, critical outages
+- **Threshold**: Default minimum score of 3.0 (moderately relevant)
+- **Cost Optimization**: Truncated prompts, consistent low-temperature scoring
+
+### Storage
+
+- **DynamoDB Table**: `news-items` with composite key `(source, published_at_id)`
+- **GSI**: `published_at-index` for cross-source time-based queries
+- **Schema**: Supports relevance scores, synthetic flags, links, timestamps
+- **Operations**: Batch writes with duplicate prevention
+
+### Mock NewsFeed API
+The GitHub repo is kept private as sharing the following is a security risk:
+
+- **Elastic public IP address**: http://56.228.68.56:5000/api/v1/
+- **Endpoints**:
+  - `POST /ingest` - Accept synthetic test events
+  - `GET /retrieve` - Return filtered events (score ≥ 3.0) sorted by relevance × recency
+  - `GET /health` - System status
+- **Processing**: Same LLM filter as production, deterministic ranking
+- **Storage**: Memory-only for synthetic data (not persisted to DynamoDB)
+- See `tests/test_api.sh` for ready-to-run examples
+
+### Bonus question
+*How would you evaluate the efficiency and correctness of your news retrieval and filtering process?*
+
+- **Filtering accuracy**: Manual annotation of a (small) set of news items for each source
+- **Time efficiency**: Measuring publication-to-upload latency
+- **Cost efficiency**: track OpenAI and AWS costs (right now, the system is set up such that there are no costs associated with AWS)
 
 ### Ideas for future development
-- Leverage the ```lastBuildDate``` field in RSS feed to avoid processing the feed if it hasn't changed since the last fetch
-- Use ```is_synthetic``` as a partition key, or just have different table for synthetic items.
+
+- Only include news items title (and description) in LLM prompt, leaving out the body, to reduce number of tokens
+- Use RSS `lastBuildDate` to avoid reprocessing unchanged feeds
+- Implement fall back filter(s) to take over if OpenAI API is down
+- Improve monitoring of the application, set up alarms
+- Apache Airflow or other orchestration tools
+- IaC (Terraform) for automated deployment of the infrastructure
+
+
 
 ## Installation
 
@@ -95,7 +161,7 @@ And then, from the project directory:
 poetry run pre-commit install
 ```
 
-### Setup on EC2 instance
+### EC2 instance setup
 To run the application on a new EC2 instance with Amazon Linux, the following set up is required:
 
 ```bash
@@ -151,6 +217,30 @@ cd newsfeed-system
 poetry install
 ```
 
-To run the application on the EC2, it needs to have proper permissions to the DynamoDB table and the S3 bucket. These are granted by creating a policy, creating a IAM role with the policy, and then attributing the role to the EC2 instance.
+To run the application on the EC2, the instance needs proper permissions to the DynamoDB `news-items` table and the S3 `newsfeed-static-web-interface` bucket. These are granted by creating a policy, creating a IAM role with the policy, and then attributing the role to the EC2 instance. The policies are available at `configs/IAM_policies`.
+
+To setup the S3 bucket, run the `scripts/setup_web_interface.py` script.
 
 Additionally, the firewall needs to be configured to allow inbound http traffic on port 5000 (for the Mock NewsFeed API).
+
+### Cron Job Setup
+The crontab can be modified with the ```crontab -e``` command.
+```bash
+# Add to crontab for automated ingestion
+# E.g: run every 2 hours with a 20 minute offset
+0 */2 * * * /path/to/scripts/run_ingestion.sh tomshardware
+20 */2 * * * /path/to/scripts/run_ingestion.sh arstechnica  
+40 */2 * * * /path/to/scripts/run_ingestion.sh r-infosecnews
+```
+
+### Flask Server setup
+```bash
+# Run in foreground
+poetry run python -m scripts.simple_api
+
+# Run in background so it persists
+nohup poetry run python -m scripts.simple_api > api.log 2>&1 &
+```
+
+### Tests
+The `./tests` directory contains some basic functionality tests. At this point, there are no automated tests, just some simple python and bash scripts.
