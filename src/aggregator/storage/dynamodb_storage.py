@@ -186,7 +186,7 @@ class DynamoDBStorage:
             return []
 
     def get_filtered_news(
-        self, min_relevance_score: float = 3.0, limit: int = 50
+        self, min_relevance_score: float = 3.0, limit: int = 200
     ) -> List[NewsItem]:
         """
         Get filtered news items for the /retrieve API endpoint.
