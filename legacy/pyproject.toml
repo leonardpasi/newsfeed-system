@@ -1,10 +1,6 @@
 [project]
-name = "nexthink-news-aggregator"
-version = "0.1.0"
+name = "news-aggregator-ec2"
 description = "A real-time newsfeed system that aggregates IT-related news from selected public sourcers, filters them for relevance, and provides a simple web dashboard to display the latest updates"
-authors = [
-    {name = "Léonard Pasi"}
-]
 readme = "README.md"
 requires-python = ">=3.12,<4.0"
 dependencies = [
