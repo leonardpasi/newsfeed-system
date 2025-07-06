@@ -4,7 +4,6 @@ from datetime import datetime
 from typing import List, Optional
 
 import praw
-from dotenv import load_dotenv
 from praw.exceptions import PRAWException
 
 from lambda_functions.shared.schemas.news_item import NewsItem
@@ -82,7 +81,6 @@ class RedditSource(BaseSource):
 
     def _init_reddit_client(self) -> praw.Reddit:
         """Initialize PRAW Reddit client with credentials."""
-        load_dotenv()
 
         client_id = os.getenv("REDDIT_APP_ID")
         client_secret = os.getenv("REDDIT_APP_SECRET")
