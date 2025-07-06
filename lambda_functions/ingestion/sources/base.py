@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 
-from lambda_functions.shared.schemas.news_item import NewsItem
+# In the ZIP file, shared/ is a the root level
+from shared.schemas.news_item import NewsItem
 
 
 class BaseSource(ABC):

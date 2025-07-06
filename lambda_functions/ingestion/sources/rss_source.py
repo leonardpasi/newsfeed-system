@@ -6,14 +6,15 @@ import time
 from datetime import datetime
 from typing import Optional
 
+# In the ZIP file, both shared/ and feedparser/, requests/, ... are at the root level
 import feedparser
 import requests
 from dateutil import parser as date_parser
 from requests.adapters import HTTPAdapter
+from shared.schemas.news_item import NewsItem
 from urllib3.util.retry import Retry
 
-from lambda_functions.shared.schemas.news_item import NewsItem
-
+# Relative import
 from .base import BaseSource
 
 

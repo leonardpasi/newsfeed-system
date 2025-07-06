@@ -3,11 +3,12 @@ import os
 from datetime import datetime
 from typing import List, Optional
 
+# In the ZIP file, both shared/ and praw/ are at the root level
 import praw
 from praw.exceptions import PRAWException
+from shared.schemas.news_item import NewsItem
 
-from lambda_functions.shared.schemas.news_item import NewsItem
-
+# Relative import
 from .base import BaseSource
 
 
