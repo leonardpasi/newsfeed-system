@@ -10,6 +10,8 @@
 
 __pycache__/
 
+*.zip
+
 # -- Terraform https://github.com/github/gitignore/blob/main/Terraform.gitignore --
 
 # Local .terraform directories
