@@ -74,3 +74,22 @@ resource "null_resource" "build_storage_lambda" {
     ]))
   }
 }
+
+# Build dashboard update lambda
+resource "null_resource" "build_dashboard_update_lambda" {
+  provisioner "local-exec" {
+    command = "chmod +x build_lambda.sh && ./build_lambda.sh dashboard_update"
+    working_dir = path.module
+  }
+
+  triggers = {
+    code_hash = sha256(join("", [
+      for f in fileset("${path.module}/../lambda_functions/dashboard_update", "**/*") :
+      filesha256("${path.module}/../lambda_functions/dashboard_update/${f}")
+    ]))
+    shared_hash = sha256(join("", [
+      for f in fileset("${path.module}/../lambda_functions/shared", "**/*") :
+      filesha256("${path.module}/../lambda_functions/shared/${f}")
+    ]))
+  }
+}

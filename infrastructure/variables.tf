@@ -24,7 +24,19 @@ variable "openai_api_key" {
 }
 
 variable "relevance_score_threshold" {
-    description = "news items with a relevance score heigher than threshold are stored, others are discarded"
+    description = "news items with a relevance score heigher than threshold are stored to dynamodb, others are discarded"
     type = number
     default = 2.0
+}
+
+variable "dashboard_lookback_days" {
+  description = "Number of days to look back for dashboard articles"
+  type        = number
+  default     = 7
+}
+
+variable "dashboard_min_relevance_score" {
+  description = "Minimum relevance score for articles to appear in dashboard"
+  type        = number
+  default     = 3.0
 }

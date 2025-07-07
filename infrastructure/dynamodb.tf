@@ -14,17 +14,19 @@ resource "aws_dynamodb_table" "news_items" {
     type = "S"
   }
 
+  attribute {
+  name = "item_type"
+  type = "S"
+}
+
   # GSI for dashboard queries - get articles by timestamp
   global_secondary_index {
-    name     = "published_at-index"
-    hash_key = "published_at"
+    name      = "recent-articles-index"
+    hash_key  = "item_type"
+    range_key = "published_at"
 
     projection_type = "ALL"
   }
-
-  # Enable streams for dashboard updates (future step)
-  stream_enabled   = true
-  stream_view_type = "NEW_IMAGE"
 
 }
 
@@ -37,9 +39,4 @@ output "dynamodb_table_name" {
 output "dynamodb_table_arn" {
   description = "ARN of the DynamoDB table"
   value       = aws_dynamodb_table.news_items.arn
-}
-
-output "dynamodb_stream_arn" {
-  description = "ARN of the DynamoDB stream"
-  value       = aws_dynamodb_table.news_items.stream_arn
 }

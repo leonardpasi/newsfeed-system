@@ -50,6 +50,13 @@ resource "aws_iam_role_policy" "storage_lambda_policy" {
       {
         Effect = "Allow"
         Action = [
+            "lambda:InvokeFunction"
+        ]
+        Resource = aws_lambda_function.dashboard_update.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents"
@@ -75,6 +82,7 @@ resource "aws_lambda_function" "storage" {
   environment {
     variables = {
       DYNAMODB_TABLE_NAME = aws_dynamodb_table.news_items.name
+      DASHBOARD_LAMBDA_NAME = aws_lambda_function.dashboard_update.function_name
     }
   }
 
