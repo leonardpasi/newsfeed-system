@@ -3,6 +3,7 @@ import logging
 import os
 from typing import Any, Dict
 
+# In the ZIP file, both sources/ and boto3/ are at the root level
 import boto3
 from sources.config import SOURCE_CONFIG
 from sources.reddit_source import RedditSource
