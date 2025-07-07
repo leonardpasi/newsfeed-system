@@ -35,3 +35,27 @@ output "raw_news_dlq_url" {
   description = "URL of the dead letter queue"
   value       = aws_sqs_queue.raw_news_dlq.url
 }
+
+# Queue for news items that passed deduplication
+resource "aws_sqs_queue" "new_news_dlq" {
+  name = "newsfeed-new-news-dlq"
+  message_retention_seconds = 1209600  # 14 days
+}
+
+resource "aws_sqs_queue" "new_news" {
+  name = "newsfeed-new-news"
+
+  visibility_timeout_seconds = 60
+  message_retention_seconds = 1209600  # 14 days
+
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.new_news_dlq.arn
+    maxReceiveCount     = 3
+  })
+}
+
+# Output for Lambda environment variable
+output "new_news_queue_url" {
+  description = "URL of the new news SQS queue"
+  value       = aws_sqs_queue.new_news.url
+}
