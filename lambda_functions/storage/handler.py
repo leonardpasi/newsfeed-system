@@ -18,6 +18,10 @@ dynamodb = boto3.resource("dynamodb")
 TABLE_NAME = os.environ["DYNAMODB_TABLE_NAME"]
 table = dynamodb.Table(TABLE_NAME)
 
+# Initalize Lambda client
+lambda_client = boto3.client("lambda")
+DASHBOARD_LAMBDA_NAME = os.environ["DASHBOARD_LAMBDA_NAME"]
+
 
 def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     """
@@ -53,6 +57,9 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         stored_count = batch_store_items(news_items)
 
         logger.info(f"Successfully stored {stored_count}/{len(news_items)} items")
+
+        if stored_count > 0:
+            invoke_dashboard_update()
 
         return {
             "statusCode": 200,
@@ -124,6 +131,7 @@ def convert_news_item_to_dynamo_format(news_item: NewsItem) -> dict:
     item = {
         "id": news_item.id,
         "source": news_item.source,
+        "item_type": "article",
         "title": news_item.title,
         "body": news_item.body or "",
         "published_at": news_item.published_at.isoformat() + "Z",
@@ -140,3 +148,16 @@ def convert_news_item_to_dynamo_format(news_item: NewsItem) -> dict:
         item["relevance_score"] = Decimal(str(news_item.relevance_score))
 
     return item
+
+
+def invoke_dashboard_update():
+    """Asynchronously invoke dashboard update lambda."""
+    try:
+        lambda_client.invoke(
+            FunctionName=DASHBOARD_LAMBDA_NAME,
+            InvocationType="Event",  # Async invocation
+        )
+        logger.info("Dashboard update lambda invoked successfully")
+    except Exception as e:
+        logger.error(f"Failed to invoke dashboard lambda: {e}")
+        # Don't raise - dashboard failure shouldn't affect storage
