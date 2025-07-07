@@ -59,3 +59,33 @@ output "new_news_queue_url" {
   description = "URL of the new news SQS queue"
   value       = aws_sqs_queue.new_news.url
 }
+
+# Dead Letter Queue for filtered news processing
+resource "aws_sqs_queue" "filtered_news_dlq" {
+  name = "newsfeed-filtered-news-dlq"
+  message_retention_seconds = 1209600  # 14 days
+}
+
+# Queue for news items that passed LLM filtering
+resource "aws_sqs_queue" "filtered_news" {
+  name = "newsfeed-filtered-news"
+
+  visibility_timeout_seconds = 60
+  message_retention_seconds = 1209600  # 14 days
+
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.filtered_news_dlq.arn
+    maxReceiveCount     = 3
+  })
+}
+
+# Output for Lambda environment variable
+output "filtered_news_queue_url" {
+  description = "URL of the filtered news SQS queue"
+  value       = aws_sqs_queue.filtered_news.url
+}
+
+output "filtered_news_dlq_url" {
+  description = "URL of the filtered news dead letter queue"
+  value       = aws_sqs_queue.filtered_news_dlq.url
+}
