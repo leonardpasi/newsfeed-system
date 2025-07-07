@@ -45,7 +45,7 @@ resource "aws_sqs_queue" "new_news_dlq" {
 resource "aws_sqs_queue" "new_news" {
   name = "newsfeed-new-news"
 
-  visibility_timeout_seconds = 60
+  visibility_timeout_seconds = 360  # 6 minutes (Lambda timeout + buffer)
   message_retention_seconds = 1209600  # 14 days
 
   redrive_policy = jsonencode({

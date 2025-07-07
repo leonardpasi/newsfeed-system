@@ -22,3 +22,9 @@ variable "openai_api_key" {
     sensitive = true
     type = string
 }
+
+variable "relevance_score_threshold" {
+    description = "news items with a relevance score heigher than threshold are stored, others are discarded"
+    type = number
+    default = 2.0
+}
