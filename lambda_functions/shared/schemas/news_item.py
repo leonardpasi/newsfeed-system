@@ -23,7 +23,7 @@ class NewsItem:
 
     def to_dict(self) -> dict:
         """Convert to dictionary for API responses."""
-        return {
+        result = {
             "id": self.id,
             "source": self.source,
             "title": self.title,
@@ -31,14 +31,32 @@ class NewsItem:
             "published_at": self.published_at.isoformat() + "Z",
         }
 
+        # Include optional fields if they exist
+        if self.link:
+            result["link"] = self.link
+        if self.relevance_score is not None:
+            result["relevance_score"] = self.relevance_score
+        if hasattr(self, "is_synthetic"):
+            result["is_synthetic"] = self.is_synthetic
+
+        return result
+
     @classmethod
     def from_dict(cls, data: dict) -> "NewsItem":
         """Create from dictionary (for API ingestion)."""
         published_at = data["published_at"].rstrip("Z")
-        return cls(
+
+        item = cls(
             id=data["id"],
             source=data["source"],
             title=data["title"],
             body=data.get("body", ""),
             published_at=datetime.fromisoformat(published_at),
         )
+
+        # Set optional fields
+        item.link = data.get("link")
+        item.relevance_score = data.get("relevance_score")
+        item.is_synthetic = data.get("is_synthetic", False)
+
+        return item
