@@ -1,5 +1,5 @@
 # Newsfeed-system <!-- omit from toc -->
-*A real-time newsfeed system that aggregates IT-related news from selected public sourcers, filters them for relevance, and provides a simple web dashboard to display the latest updates. Dashboard available [here](https://newsfeed-static-web-interface.s3.eu-north-1.amazonaws.com/dashboard.html).*
+*A real-time newsfeed system that aggregates IT-related news from selected public sourcers, filters them for relevance, and provides a simple web dashboard to display the latest updates.*
 
 ## Table of contents <!-- omit from toc -->
 - [Architecture](#architecture)
@@ -43,7 +43,7 @@
 ```
 - **Core Technologies**: Python, Amazon EC2, DynamoDB, S3, OpenAI API, Flask  
 - **Key Principles**: Modular design, automated operations, monitoring
-- **Web Dashboard**: available **[here](https://newsfeed-static-web-interface.s3.eu-north-1.amazonaws.com/dashboard.html)**
+- **Web Dashboard**: ** (No longer online)
 
 ### Ingestion
 
@@ -70,9 +70,8 @@
 - **Operations**: Batch writes with duplicate prevention
 
 ### Mock NewsFeed API
-The GitHub repo is kept private as sharing the following is a security risk:
 
-- **Elastic public IP address**: http://56.228.68.56:5000/api/v1/
+- **Elastic public IP address**: *private - no longer exists*
 - **Endpoints**:
   - `POST /ingest` - Accept synthetic test events
   - `GET /retrieve` - Return filtered events (score ≥ 3.0) sorted by relevance × recency
