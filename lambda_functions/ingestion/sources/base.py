@@ -1,0 +1,15 @@
+from abc import ABC, abstractmethod
+
+# In the ZIP file, shared/ is a the root level
+from shared.schemas.news_item import NewsItem
+
+
+class BaseSource(ABC):
+    @abstractmethod
+    def fetch_articles(self) -> list[NewsItem]:
+        pass
+
+    @property
+    @abstractmethod
+    def source_name(self) -> str:
+        pass

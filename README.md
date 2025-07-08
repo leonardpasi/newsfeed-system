@@ -1,246 +1,145 @@
 # Newsfeed-system <!-- omit from toc -->
-*A real-time newsfeed system that aggregates IT-related news from selected public sourcers, filters them for relevance, and provides a simple web dashboard to display the latest updates. Dashboard available [here](https://newsfeed-static-web-interface.s3.eu-north-1.amazonaws.com/dashboard.html).*
+*A real-time newsfeed system that aggregates IT-related news from selected public sourcers, filters them for relevance, and provides a simple web dashboard to display the latest updates. Dashboard available [here](https://newsfeed-dashboard-3197d34e.s3.eu-central-2.amazonaws.com/dashboard.html).*
 
 ## Table of contents <!-- omit from toc -->
-- [Architecture](#architecture)
+- [Legacy Architecture: EC2-based](#legacy-architecture-ec2-based)
+- [New Architecture: AWS Lambda-based (Serverless)](#new-architecture-aws-lambda-based-serverless)
   - [Overview](#overview)
   - [Ingestion](#ingestion)
-  - [Filtering](#filtering)
+  - [Deduplication](#deduplication)
+  - [LLM-based relevance scoring](#llm-based-relevance-scoring)
   - [Storage](#storage)
+  - [Web dashboard update](#web-dashboard-update)
   - [Mock NewsFeed API](#mock-newsfeed-api)
-  - [Bonus question](#bonus-question)
-  - [Ideas for future development](#ideas-for-future-development)
 - [Installation](#installation)
-  - [Install Poetry](#install-poetry)
-  - [Create virtual environment](#create-virtual-environment)
-  - [Configuring environment variables](#configuring-environment-variables)
-  - [Running Scripts](#running-scripts)
-  - [Install pre-commit hooks](#install-pre-commit-hooks)
-  - [EC2 instance setup](#ec2-instance-setup)
-  - [Cron Job Setup](#cron-job-setup)
-  - [Flask Server setup](#flask-server-setup)
-  - [Tests](#tests)
+  - [Prerequisites](#prerequisites)
+  - [Environment Variables](#environment-variables)
+  - [Deploy Infrastructure](#deploy-infrastructure)
+  - [Outputs](#outputs)
+  - [Testing](#testing)
 
 
-## Architecture
+## Legacy Architecture: EC2-based
+The original EC2-based implementation is preserved in the `/legacy` directory.
+This system is no longer maintained but serves as reference for the original design.
+
+## New Architecture: AWS Lambda-based (Serverless)
 
 ### Overview
 ```
-┌─────────────┐    ┌──────────────┐    ┌─────────────┐    ┌─────────────┐
-│ RSS Feeds   │───▶│  Ingestion   │───▶│ LLM Filter  │───▶│ DynamoDB    │
-│ Reddit API  │    │  (Python)    │    │ (OpenAI)    │    │ Storage     │
-└─────────────┘    └──────────────┘    └─────────────┘    └─────────────┘
-                                                                    │
-┌─────────────┐    ┌──────────────┐    ┌─────────────┐              │
-│ Static Web  │◀───│ S3 Bucket    │◀───│ JSON Export │◀─────────────┘
-│ Dashboard   │    │ (hosting)    │    │ Generator   │
-└─────────────┘    └──────────────┘    └─────────────┘
+  ┌─────────────┐            ┌───────────┐             ┌───────────┐  
+  │ EventBridge │  triggers  │ Ingestion │  writes to  │ Raw News  │  
+  │ (schedule)  ├────────────►  Lambda   │─────────────► SQS Queue │  
+  └─────────────┘            └───────────┘             └─────┬─────┘  
+                                                             │  
+                                                             │triggers  
+                                                             │  
+  ┌─────────────┐            ┌───────────┐           ┌───────▼───────┐  
+  │ LLM Scoring │  triggers  │ New News  │ writes to │ Deduplication │  
+  │ Lambda      ◄────────────┤ SQS Queue ◄───────────┤    Lambda     │  
+  └─────┬───────┘            └───────────┘           └───────┬───────┘  
+        │                                                    │  
+        │writes to                                           │checks  
+        │                                                    │  
+   ┌────▼─────┐               ┌─────────┐              ┌─────▼─────┐  
+   │ Filtered │    triggers   │ Storage │  writes to   │ DynamoDB  │  
+   │ News SQS ├───────────────► Lambda  ├──────────────► (Storage) │  
+   └──────────┘               └────┬────┘              └───────────┘  
+                                   │  
+                                   │triggers  
+                                   │  
+                             ┌─────▼─────┐  
+                             │ Dashboard │            ┌────────────────┐
+                             │ Update    │ writes to  │ Dashboard data │
+                             │ Lambda    ├────────────► S3 Bucket      │
+                             └───────────┘            └────────────────┘
 
-┌─────────────┐    ┌──────────────┐    ┌─────────────┐    ┌─────────────┐
-│ Test        │───▶│ Mock API     │───▶│ LLM Filter  │───▶│ In-Memory   │
-│ Harness     │    │ (Flask)      │    │ (OpenAI)    │    │ Storage     │
-└─────────────┘    └──────────────┘    └─────────────┘    └─────────────┘
 ```
-- **Core Technologies**: Python, Amazon EC2, DynamoDB, S3, OpenAI API, Flask  
-- **Key Principles**: Modular design, automated operations, monitoring
-- **Web Dashboard**: available **[here](https://newsfeed-static-web-interface.s3.eu-north-1.amazonaws.com/dashboard.html)**
+
+**Key Technologies**: AWS Lambda, SQS, DynamoDB, S3, EventBridge, API Gateway, OpenAI API, Terraform
+
+**Key design principles:**
+- Event-driven processing: Fully asynchronous pipeline with SQS decoupling and EventBridge scheduling
+- Batch optimization: All components process messages in batches (size 10) with optimized DynamoDB operations
+- Fault tolerance: Dead Letter Queues and retry mechanisms ensure reliable processing
+- Auto-scaling: Serverless architecture scales automatically based on workload with pay-per-use pricing
+- Modular design: Clear separation of concerns with shared code modules for consistency
+- Infrastructure as Code: Complete Terraform configuration for reproducible and quick deployments
+- Observability: CloudWatch logs for each Lambda function enable detailed monitoring and troubleshooting
 
 ### Ingestion
+EventBridge triggers Lambda functions at given frequency (currently set to daily) to fetch news from:
+- **RSS feeds**: Tom's Hardware, Ars Technica using `feedparser`
+- **Reddit API**: r/InfoSecNews via PRAW
+- Raw news items sent to SQS queue for processing
 
-- **RSS Sources**: Tom's Hardware, Ars Technica using `feedparser` with retry logic
-- **Reddit Source**: r/InfoSecNews via PRAW API with rate limiting
-- **Modular Design**: New sources added via `configs/sources_urls.yaml`
-- **Efficiency**: Filters out existing articles before processing
-- **Automation**: Cron jobs for continuous ingestion every x minutes
+### Deduplication  
+Lambda function processes SQS messages in batches, checks DynamoDB for existing article IDs using `batch_get_item`, and forwards only new items to the next queue. Deduplication is performed before the relevance scoring step to avoid evaluating the same articles multiple times.
 
-### Filtering
+### LLM-based relevance scoring
+Lambda function scores news items using OpenAI GPT-4.1-nano on a 1-5 scale for IT manager relevance. Items scoring below threshold (default: 2.0) are filtered out. The threshold is declared as a terraform variable in `\infrastructure\variables.tf` and can easily be modified. The relevance scale is the following:
 
-- **LLM Scoring**: OpenAI GPT-4.1-nano rates relevance on 1-5 scale for IT managers
-  - **1**: Consumer tech, general business
-  - **3**: Software releases, industry trends  
-  - **5**: Security breaches, critical outages
-- **Threshold**: Default minimum score of 3.0 (moderately relevant)
-- **Cost Optimization**: Truncated prompts, consistent low-temperature scoring
+- 1 = Not relevant (consumer tech, general business news)
+- 2 = Slightly relevant (minor updates, product announcements)
+- 3 = Moderately relevant (software releases, industry trends)
+- 4 = Highly relevant (security vulnerabilities, major outages)
+- 5 = Critical (major security breaches, widespread outages, critical bugs)
+
+Temperature is set to a low value for idempotency.
 
 ### Storage
+Lambda function batch-writes filtered news items to DynamoDB with relevance scores and metadata. Triggers dashboard update after successful storage.
 
-- **DynamoDB Table**: `news-items` with composite key `(source, published_at_id)`
-- **GSI**: `published_at-index` for cross-source time-based queries
-- **Schema**: Supports relevance scores, synthetic flags, links, timestamps
-- **Operations**: Batch writes with duplicate prevention
+### Web dashboard update
+Lambda function queries recent articles from DynamoDB, generates JSON data, and uploads to S3 bucket. The JSON contains all articles from the past N days, with a relevance score higher than T. N and T are declared as terraform variables as `dashboard_lookback_days` and `dashboard_min_relevance_score`, respectively. Static HTML dashboard hosted on S3 displays filtered news with client-side sorting and filtering.
 
 ### Mock NewsFeed API
-The GitHub repo is kept private as sharing the following is a security risk:
+HTTP API Gateway exposes `/ingest` and `/retrieve` endpoints for automated testing. Lambda function applies same LLM filtering logic (`lambda_functions/shared/filters/llm_filter.py`) to synthetic test data and stores results in dedicated S3 bucket.
 
-- **Elastic public IP address**: http://56.228.68.56:5000/api/v1/
-- **Endpoints**:
-  - `POST /ingest` - Accept synthetic test events
-  - `GET /retrieve` - Return filtered events (score ≥ 3.0) sorted by relevance × recency
-  - `GET /health` - System status
-- **Processing**: Same LLM filter as production, deterministic ranking
-- **Storage**: Memory-only for synthetic data (not persisted to DynamoDB)
-- See `tests/test_api.sh` for ready-to-run examples
-
-### Bonus question
-*How would you evaluate the efficiency and correctness of your news retrieval and filtering process?*
-
-- **Filtering accuracy**: Manual annotation of a (small) set of news items for each source
-- **Time efficiency**: Measuring publication-to-upload latency
-- **Cost efficiency**: track OpenAI and AWS costs (right now, the system is set up such that there are no costs associated with AWS)
-
-### Ideas for future development
-
-- Only include news items title (and description) in LLM prompt, leaving out the body, to reduce number of tokens
-- Use RSS `lastBuildDate` to avoid reprocessing unchanged feeds
-- Implement fall back filter(s) to take over if OpenAI API is down
-- Improve monitoring of the application, set up alarms
-- Apache Airflow or other orchestration tools
-- IaC (Terraform) for automated deployment of the infrastructure
-
-
+```
+┌─────────────┐    ┌──────────────┐    ┌─────────────┐
+│ API Gateway │───▶│ Mock API     │───▶│ Mock S3     │
+│ (Testing)   │    │ Lambda       │    │ Storage     │
+└─────────────┘    └──────────────┘    └─────────────┘
+```
 
 ## Installation
 
-This project uses **Poetry** for dependency management and environment setup.
-Follow the instructions below to set up the environment and run the project.
+### Prerequisites
+- AWS CLI configured with appropriate permissions
+- Terraform >= 1.2
+- Python 3.12
+- [uv](https://github.com/astral-sh/uv) (currently only used for building lambda functions)
+- OpenAI API key
+- Reddit app credentials (for subreddit ingestion)
 
-### Install Poetry
-
-If you don't have **Poetry** installed, a nice way to do so is using [pipx](https://github.com/pypa/pipx).
-
+### Environment Variables
+Create `secrets.tfvars` in the `infrastructure/` directory:
+```hcl
+reddit_app_id = "your_reddit_app_id"
+reddit_app_secret = "your_reddit_app_secret"  
+openai_api_key = "your_openai_api_key"
 ```
-pipx install poetry
-```
 
-
-### Create virtual environment
-
-Once you've cloned the repo, from the project's root directory, install dependencies using Poetry:
+### Deploy Infrastructure
 ```bash
-poetry install
+cd infrastructure
+terraform init
+terraform plan -var-file="secrets.tfvars"
+terraform apply -var-file="secrets.tfvars"
 ```
-This will create a virtual environment and install all dependencies listed in the `poetry.lock` file.
+Note: due to the way lambda builds are automated with Terraform, the terraform apply command needs to be run twice. This will be fixed in the future.
 
-### Configuring environment variables
+### Outputs
+After deployment, Terraform provides:
+- Dashboard URL for viewing filtered news
+- Mock API endpoints for automated testing
+- S3 bucket names for static hosting and data storage
+- and others. Use `terraform output` to view all the outputs.
 
-To use the LLM filter, a valid OpenAI API key is need. Furthermore, a valid Reddit app id and secret are required to make API calls to Reddit (and ingest data from subreddits)
-
-1. Create a `.env` file in the root directory of the project:
+### Testing
+The Mock Newsfeed API can be tested with the simple script `tests/test_api.sh`
 ```bash
-touch .env
+./tests/test_api.sh <mock_api_url>
 ```
-
-1. Add your OpenAI API key and Reddit app id & secret to the `.env` file:
-```
-OPENAI_API_KEY=your_api_key_here
-REDDIT_APP_ID=
-REDDIT_APP_SECRET=
-```
-
-**Note**: Make sure to keep your `.env` file private and not to commit it to version control.
-It's included in `.gitignore` to prevent accidental commits.
-
-### Running Scripts
-
-To run scripts using Poetry:
-
-```bash
-poetry run python -m scripts.main --src tomshardware --store --filter --generate-json --upload-s3
-```
-
-
-### Install pre-commit hooks
-I use `ruff` for formatting, import sorting, and linting. These
-are run automatically at every commit through the installation of pre-commit hooks.
-You can install `ruff` and `pre-commit` with pipx.
-```bash
-pipx install ruff pre-commit
-```
-And then, from the project directory:
-```bash
-poetry run pre-commit install
-```
-
-### EC2 instance setup
-To run the application on a new EC2 instance with Amazon Linux, the following set up is required:
-
-```bash
-sudo yum update -y
-
-# install pip
-sudo yum install -y python3-pip
-
-# install pipx
-python3 -m pip install --user pipx
-python3 -m pipx ensurepath
-
-# install poetry
-pipx install poetry
-
-# install and set up git
-sudo dnf install -y git
-git --version
-git config --global user.name "YOUR_NAME"
-git config --global user.email "YOUR_EMAIL"
-
-# generate ssh key pair
-ssh-keygen -t ed25519 -C "YOUR_EMAIL"
-cat ~/.ssh/id_ed25519.pub
-# Then add the public key to github account
-
-git clone git@github.com:leonardpasi/newsfeed-system.git
-
-# --- Install python3.12 with pyenv -----
-# Install dependencies
-sudo yum groupinstall -y "Development Tools"
-sudo yum install -y gcc openssl-devel bzip2-devel libffi-devel zlib-devel readline-devel sqlite-devel
-
-# Install pyenv
-curl https://pyenv.run | bash
-
-# Add to PATH
-echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc
-echo 'command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc
-echo 'eval "$(pyenv init -)"' >> ~/.bashrc
-source ~/.bashrc
-
-# Install Python 3.12
-pyenv install 3.12.7
-pyenv global 3.12.7
-
-# Verify
-python --version
-# ---------------------------------------
-
-
-cd newsfeed-system
-poetry install
-```
-
-To run the application on the EC2, the instance needs proper permissions to the DynamoDB `news-items` table and the S3 `newsfeed-static-web-interface` bucket. These are granted by creating a policy, creating a IAM role with the policy, and then attributing the role to the EC2 instance. The policies are available at `configs/IAM_policies`.
-
-To setup the S3 bucket, run the `scripts/setup_web_interface.py` script.
-
-Additionally, the firewall needs to be configured to allow inbound http traffic on port 5000 (for the Mock NewsFeed API).
-
-### Cron Job Setup
-The crontab can be modified with the ```crontab -e``` command.
-```bash
-# Add to crontab for automated ingestion
-# E.g: run every 2 hours with a 20 minute offset
-0 */2 * * * /path/to/scripts/run_ingestion.sh tomshardware
-20 */2 * * * /path/to/scripts/run_ingestion.sh arstechnica  
-40 */2 * * * /path/to/scripts/run_ingestion.sh r-infosecnews
-```
-
-### Flask Server setup
-```bash
-# Run in foreground
-poetry run python -m scripts.simple_api
-
-# Run in background so it persists
-nohup poetry run python -m scripts.simple_api > api.log 2>&1 &
-```
-
-### Tests
-The `./tests` directory contains some basic functionality tests. At this point, there are no automated tests, just some simple python and bash scripts.
+At this point, there are no automated tests. I plan to work on this soon.

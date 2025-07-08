@@ -1,0 +1,6 @@
+feedparser
+requests
+praw
+python-dateutil
+urllib3
+boto3

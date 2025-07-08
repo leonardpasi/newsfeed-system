@@ -1,6 +1,10 @@
-curl http://56.228.68.56:5000/api/v1/health
+#!/bin/bash
 
-curl -X POST http://56.228.68.56:5000/api/v1/ingest \
+# Usage: ./test_api.sh <mock_api_url>
+
+URL=$1
+
+curl -X POST  ${URL}/ingest \
   -H "Content-Type: application/json" \
   -d '[
     {
@@ -26,4 +30,4 @@ curl -X POST http://56.228.68.56:5000/api/v1/ingest \
     }
   ]'
 
-curl http://56.228.68.56:5000/api/v1/retrieve
+curl ${URL}/retrieve
