@@ -1,5 +1,5 @@
 # Newsfeed-system <!-- omit from toc -->
-*A real-time newsfeed system that aggregates IT-related news from selected public sourcers, filters them for relevance, and provides a simple web dashboard to display the latest updates. Dashboard available [here](https://newsfeed-dashboard-3197d34e.s3.eu-central-2.amazonaws.com/dashboard.html).*
+*A real-time newsfeed system that aggregates IT-related news from selected public sourcers, filters them for relevance, and provides a simple web dashboard to display the latest updates. Dashboard available [here](https://newsfeed-dashboard-f59b4f7f.s3.eu-central-2.amazonaws.com/dashboard.html).*
 
 ## Table of contents <!-- omit from toc -->
 - [Legacy Architecture: EC2-based](#legacy-architecture-ec2-based)
