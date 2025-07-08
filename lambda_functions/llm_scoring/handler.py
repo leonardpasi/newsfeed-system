@@ -4,7 +4,7 @@ import os
 from typing import Any, Dict
 
 import boto3
-from llm_filter import LLMRelevanceFilter
+from shared.filters.llm_filter import LLMRelevanceFilter
 from shared.schemas.news_item import NewsItem
 
 # Configure logging
