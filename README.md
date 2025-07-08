@@ -58,6 +58,15 @@ This system is no longer maintained but serves as reference for the original des
 
 **Key Technologies**: AWS Lambda, SQS, DynamoDB, S3, EventBridge, API Gateway, OpenAI API, Terraform
 
+**Key design principles:**
+- Event-driven processing: Fully asynchronous pipeline with SQS decoupling and EventBridge scheduling
+- Batch optimization: All components process messages in batches (size 10) with optimized DynamoDB operations
+- Fault tolerance: Dead Letter Queues and retry mechanisms ensure reliable processing
+- Auto-scaling: Serverless architecture scales automatically based on workload with pay-per-use pricing
+- Modular design: Clear separation of concerns with shared code modules for consistency
+- Infrastructure as Code: Complete Terraform configuration for reproducible and quick deployments
+- Observability: CloudWatch logs for each Lambda function enable detailed monitoring and troubleshooting
+
 ### Ingestion
 EventBridge triggers Lambda functions at given frequency (currently set to daily) to fetch news from:
 - **RSS feeds**: Tom's Hardware, Ars Technica using `feedparser`
@@ -126,6 +135,7 @@ After deployment, Terraform provides:
 - Dashboard URL for viewing filtered news
 - Mock API endpoints for automated testing
 - S3 bucket names for static hosting and data storage
+- and others. Use `terraform output` to view all the outputs.
 
 ### Testing
 The Mock Newsfeed API can be tested with the simple script `tests/test_api.sh`
