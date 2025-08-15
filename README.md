@@ -68,7 +68,7 @@ This system is no longer maintained but serves as reference for the original des
 - Observability: CloudWatch logs for each Lambda function enable detailed monitoring and troubleshooting
 
 ### Ingestion
-EventBridge triggers Lambda functions at given frequency (currently set to daily) to fetch news from:
+EventBridge triggers Lambda functions at given frequency (currently set to each Monday) to fetch news from:
 - **RSS feeds**: Tom's Hardware, Ars Technica using `feedparser`
 - **Reddit API**: r/InfoSecNews via PRAW
 - Raw news items sent to SQS queue for processing

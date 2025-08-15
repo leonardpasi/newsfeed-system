@@ -2,21 +2,21 @@
 resource "aws_cloudwatch_event_rule" "tomshardware_schedule" {
   name                = "newsfeed-tomshardware-schedule"
   description         = "Trigger Tom's Hardware ingestion daily"
-  schedule_expression = "cron(0 8 * * ? *)"
+  schedule_expression = "cron(0 8 ? * MON *)"
 }
 
 # EventBridge rule for Ars Technica ingestion (daily at 8:30 AM UTC)
 resource "aws_cloudwatch_event_rule" "arstechnica_schedule" {
   name                = "newsfeed-arstechnica-schedule"
   description         = "Trigger Ars Technica ingestion daily"
-  schedule_expression = "cron(30 8 * * ? *)"
+  schedule_expression = "cron(30 8 ? * MON *)"
 }
 
 # EventBridge rule for Reddit ingestion (daily at 9:00 AM UTC)
 resource "aws_cloudwatch_event_rule" "reddit_schedule" {
   name                = "newsfeed-reddit-schedule"
   description         = "Trigger Reddit ingestion daily"
-  schedule_expression = "cron(0 9 * * ? *)"
+  schedule_expression = "cron(0 9 ? * MON *)"
 }
 
 # EventBridge target for Tom's Hardware
