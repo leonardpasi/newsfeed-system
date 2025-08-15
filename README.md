@@ -1,5 +1,5 @@
 # Newsfeed-system <!-- omit from toc -->
-*A real-time newsfeed system that aggregates IT-related news from selected public sourcers, filters them for relevance, and provides a simple web dashboard to display the latest updates. Dashboard available [here](https://newsfeed-dashboard-f59b4f7f.s3.eu-central-2.amazonaws.com/dashboard.html).*
+*A newsfeed system that aggregates IT-related news from selected public sources, filters them for relevance using LLMs, and displays them on a simple web dashboard. Dashboard available [here](https://newsfeed-dashboard-f59b4f7f.s3.eu-central-2.amazonaws.com/dashboard.html).*
 
 ## Table of contents <!-- omit from toc -->
 - [Legacy Architecture: EC2-based](#legacy-architecture-ec2-based)
@@ -94,12 +94,19 @@ Lambda function batch-writes filtered news items to DynamoDB with relevance scor
 Lambda function queries recent articles from DynamoDB, generates JSON data, and uploads to S3 bucket. The JSON contains all articles from the past N days, with a relevance score higher than T. N and T are declared as terraform variables as `dashboard_lookback_days` and `dashboard_min_relevance_score`, respectively. Static HTML dashboard hosted on S3 displays filtered news with client-side sorting and filtering.
 
 ### Mock NewsFeed API
-HTTP API Gateway exposes `/ingest` and `/retrieve` endpoints for automated testing. Lambda function applies same LLM filtering logic (`lambda_functions/shared/filters/llm_filter.py`) to synthetic test data and stores results in dedicated S3 bucket.
+The Mock NewsFeed API provides an interface for automated evaluation of the filtering logic, using the following API contract:
+
+| Endpoint | Use | Description |
+|----------|-----|-------------|
+| /ingest | Ingest raw events | Accept a single call delivering a JSON array (or stream) of event objects. Each object must contain the keys: • id (string, unique) • source (string, e.g. "reddit" or "ars-technica") • title (string) • body (string, optional) • published_at (ISO-8601/RFC 3339 timestamp, UTC) The call returns an acknowledgment (HTTP 200 / successful exit status / ACK message). |
+| /retrieve | Retrieve filtered events | Provide a synchronous call that returns only the events that the system decided to keep, in the same JSON shape as above, sorted according to (relevance × recency). This call must be deterministic for a given ingestion batch. |
+
+Lambda function applies same LLM filtering logic (`lambda_functions/shared/filters/llm_filter.py`) to synthetic test data and stores results in dedicated S3 bucket.
 
 ```
 ┌─────────────┐    ┌──────────────┐    ┌─────────────┐
-│ API Gateway │───▶│ Mock API     │───▶│ Mock S3     │
-│ (Testing)   │    │ Lambda       │    │ Storage     │
+│ HTTP API    │───▶│ Mock API     │───▶│ Mock S3     │
+│ Gateway     │    │ Lambda       │    │ Storage     │
 └─────────────┘    └──────────────┘    └─────────────┘
 ```
 
