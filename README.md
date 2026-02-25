@@ -1,5 +1,5 @@
 # Newsfeed-system <!-- omit from toc -->
-*A newsfeed system that aggregates IT-related news from selected public sources, filters them for relevance using LLMs, and displays them on a simple web dashboard. Dashboard available [here](https://newsfeed-dashboard-f59b4f7f.s3.eu-central-2.amazonaws.com/dashboard.html).*
+*A newsfeed system that aggregates IT-related news from selected public sources, filters them for relevance using LLMs, and displays them on a simple web dashboard. Dashboard available [here](http://newsfeed-dashboard-ab776bd5.s3-website.eu-central-2.amazonaws.com/).*
 
 ## Table of contents <!-- omit from toc -->
 - [Legacy Architecture: EC2-based](#legacy-architecture-ec2-based)
