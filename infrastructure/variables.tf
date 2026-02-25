@@ -32,7 +32,7 @@ variable "relevance_score_threshold" {
 variable "dashboard_lookback_days" {
   description = "Number of days to look back for dashboard articles"
   type        = number
-  default     = 7
+  default     = 20
 }
 
 variable "dashboard_min_relevance_score" {
